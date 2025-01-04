@@ -9,17 +9,35 @@ import struct
 import os
 import sys
 import random
-import argparse
 import hashlib
 import ipaddress
+from urllib.parse import urlparse
 
-parser = argparse.ArgumentParser(description="Enter an IP address and port to scan.")
-group = parser.add_mutually_exclusive_group()
-group.add_argument("scan", nargs='?', help="Enter an IP or domain to scan.")
-args = parser.parse_args()
+def parse_url(url):
+    """
+    Parse the given URL to extract the domain (or host) and port.
+    Returns default ports for http (80) and https (443) if no port is specified.
 
-if not (args.scan or args.input):
-    parser.error("A domain/IP to scan or an input file is required.")
+    :param url: str, the URL to parse
+    :return: tuple, containing the host and port. 
+    """
+    parsed_url = urlparse(url)
+    
+    # Extract host
+    host = parsed_url.hostname
+    
+    # Determine port based on scheme if not explicitly given
+    port = parsed_url.port
+    if port is None:
+        if parsed_url.scheme == 'http':
+            port = 80
+        elif parsed_url.scheme == 'https':
+            port = 443
+        else:
+            # For other schemes, we can't assume a default port, so return None or handle as needed
+            port = None
+
+    return host, port
 
 #Randomly choose a grease value
 def choose_grease():
@@ -247,7 +265,7 @@ def supported_versions(jarm_details, grease):
     return ext
 
 #Send the assembled client hello using a socket
-def send_packet(packet):
+def send_packet(destination_host, destination_port, packet):
     try:
         #Determine if the input is an IP or domain name
         try:
@@ -434,7 +452,7 @@ def ParseNumber(number):
     else:
         return int(number)
 
-def main():
+def scanForJarm(destination_host, destination_port):
     #Select the packets and formats to send
     #Array format = [destination_host,destination_port,version,cipher_list,cipher_order,GREASE,RARE_APLN,1.3_SUPPORT,extension_orders]
     tls1_2_forward = [destination_host, destination_port, "TLS_1.2", "ALL", "FORWARD", "NO_GREASE", "APLN", "1.2_SUPPORT", "REVERSE"]
@@ -459,7 +477,7 @@ def main():
     iterate = 0
     while iterate < len(queue):
         payload = packet_building(queue[iterate])
-        server_hello, ip = send_packet(payload)
+        server_hello, ip = send_packet(destination_host, destination_port, payload)
         #Deal with timeout error
         if server_hello == "TIMEOUT":
             jarm = "|||,|||,|||,|||,|||,|||,|||,|||,|||,|||"
@@ -473,30 +491,12 @@ def main():
             jarm += ","
     #Fuzzy hash
     result = jarm_hash(jarm)
-    #Print to STDOUT
-    if ip != None:
-        sys.stdout.write('{"host":"' + destination_host + '","ip":"' + ip + '","result":"' + result + '"')
-    else:
-        sys.stdout.write('{"host":"' + destination_host + '","ip":null,"result":"' + result + '"')
-    #Verbose mode adds pre-fuzzy-hashed JARM
-    #if args.verbose:
-    #    if args.json:
-    #        sys.stdout.write(',"jarm":"' + jarm + '"')
-    #    else:
-    #        scan_count = 1
-    #        for round in jarm.split(","):
-    #            print("Scan " + str(scan_count) + ": " + round, end="")
-    #            if scan_count == len(jarm.split(",")):
-    #                print("\n",end="")
-    #            else:
-    #                print(",")
-    #            scan_count += 1
-    sys.stdout.write("}\n")
+    return str('{"host":"' + destination_host + '","ip":"' + ip + '","JARM":"' + result + '"}')
 
+if len(sys.argv) < 2:
+    print("Usage: python script.py <URL>")
+    sys.exit(1)
 
-#Set destination host and port
-destination_host = args.scan
-destination_port = 443
-#JSON output
-file_ext = ".json"
-main()
+url = sys.argv[1]
+host, port = parse_url(url)
+print(scanForJarm(host, port))
