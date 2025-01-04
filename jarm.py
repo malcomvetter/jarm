@@ -1,19 +1,6 @@
-# Version 1.0 (November 2020)
-#
-# Created by:
-# John Althouse
-# Andrew Smart
-# RJ Nunaly
-# Mike Brady
-#
-# Converted to Python by:
-# Caleb Yu
-#
-# Copyright (c) 2020, salesforce.com, inc.
+# Derivative work of salesforce.com, inc., original copyright (c) 2020
 # All rights reserved.
-# Licensed under the BSD 3-Clause license.
-# For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
-#
+# Licensed under the BSD 3-Clause license, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
 from __future__ import print_function
 
 import codecs
@@ -29,17 +16,8 @@ import ipaddress
 parser = argparse.ArgumentParser(description="Enter an IP address and port to scan.")
 group = parser.add_mutually_exclusive_group()
 group.add_argument("scan", nargs='?', help="Enter an IP or domain to scan.")
-group.add_argument("-i", "--input", help="Provide a list of IP addresses or domains to scan, one domain or IP address per line.  Optional: Specify port to scan with comma separation (e.g. 8.8.4.4,853).", type=str)
-parser.add_argument("-p", "--port", help="Enter a port to scan (default 443).", type=int)
-parser.add_argument("-v", "--verbose", help="Verbose mode: displays the JARM results before being hashed.", action="store_true")
-parser.add_argument("-V", "--version", help="Print out version and exit.", action="store_true")
-parser.add_argument("-o", "--output", help="Provide a filename to output/append results to a CSV file.", type=str)
-parser.add_argument("-j", "--json", help="Output ndjson (either to file or stdout; overrides --output defaults to CSV)", action="store_true")
-parser.add_argument("-P", "--proxy", help="To use a SOCKS5 proxy, provide address:port.", type=str)
 args = parser.parse_args()
-if args.version:
-    print("JARM version 1.0")
-    exit()
+
 if not (args.scan or args.input):
     parser.error("A domain/IP to scan or an input file is required.")
 
@@ -281,20 +259,12 @@ def send_packet(packet):
                 raw_ip = False
         #Connect the socket
         if ":" in destination_host:
-            if args.proxy:
-                sock = socks.socksocket(socket.AF_INET6, socket.SOCK_STREAM)
-                sock.set_proxy(socks.SOCKS5, proxyhost, proxyport)
-            else:
-                sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             #Timeout of 20 seconds
             sock.settimeout(20)
             sock.connect((destination_host, destination_port, 0, 0))
         else:
-            if args.proxy:
-                sock = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.set_proxy(socks.SOCKS5, proxyhost, proxyport)
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             #Timeout of 20 seconds
             sock.settimeout(20)
             sock.connect((destination_host, destination_port))
@@ -503,104 +473,30 @@ def main():
             jarm += ","
     #Fuzzy hash
     result = jarm_hash(jarm)
-    #Write to file
-    if args.output:
-        if ip != None:
-            if args.json:
-                file.write('{"host":"' + destination_host + '","ip":"' + ip + '","result":"' + result + '"')
-            else:
-                file.write(destination_host + "," + ip + "," + result)
-        else:
-            file.write(destination_host + ",Failed to resolve IP," + result)
-        #Verbose mode adds pre-fuzzy-hashed JARM
-        if args.verbose:
-            if args.json:
-                file.write(',"jarm":"' + jarm + '"')
-            else:
-                file.write("," + jarm)
-        if args.json:
-            file.write("}")
-        file.write("\n")
     #Print to STDOUT
+    if ip != None:
+        sys.stdout.write('{"host":"' + destination_host + '","ip":"' + ip + '","result":"' + result + '"')
     else:
-        if ip != None:
-            if args.json:
-                sys.stdout.write('{"host":"' + destination_host + '","ip":"' + ip + '","result":"' + result + '"')
-            else:
-                print("Domain: " + destination_host)
-                print("Resolved IP: " + ip)
-                print("JARM: " + result)
-        else:
-            if args.json:
-                sys.stdout.write('{"host":"' + destination_host + '","ip":null,"result":"' + result + '"')
-            else:
-                print("Domain: " + destination_host)
-                print("Resolved IP: IP failed to resolve.")
-                print("JARM: " + result)
-        #Verbose mode adds pre-fuzzy-hashed JARM
-        if args.verbose:
-            if args.json:
-                sys.stdout.write(',"jarm":"' + jarm + '"')
-            else:
-                scan_count = 1
-                for round in jarm.split(","):
-                    print("Scan " + str(scan_count) + ": " + round, end="")
-                    if scan_count == len(jarm.split(",")):
-                        print("\n",end="")
-                    else:
-                        print(",")
-                    scan_count += 1
-        if args.json:
-            sys.stdout.write("}\n")
+        sys.stdout.write('{"host":"' + destination_host + '","ip":null,"result":"' + result + '"')
+    #Verbose mode adds pre-fuzzy-hashed JARM
+    #if args.verbose:
+    #    if args.json:
+    #        sys.stdout.write(',"jarm":"' + jarm + '"')
+    #    else:
+    #        scan_count = 1
+    #        for round in jarm.split(","):
+    #            print("Scan " + str(scan_count) + ": " + round, end="")
+    #            if scan_count == len(jarm.split(",")):
+    #                print("\n",end="")
+    #            else:
+    #                print(",")
+    #            scan_count += 1
+    sys.stdout.write("}\n")
 
-
-#set proxy
-if args.proxy:
-    proxyhost, proxyport = args.proxy.split(':')
-    proxyport = ParseNumber(proxyport)
-    try:
-        import socks
-    except ImportError:
-        print('Option proxy requires PySocks: pip install PySocks')
-        exit()
 
 #Set destination host and port
 destination_host = args.scan
-if args.port:
-    destination_port = int(args.port)
-else:
-    destination_port = 443
+destination_port = 443
 #JSON output
-if args.json:
-    file_ext = ".json"
-else:
-    file_ext = ".csv"
-#File output option
-if args.output:
-    if args.json:
-        if args.output[-5:] != file_ext:
-            output_file = args.output + file_ext
-        else:
-            output_file = args.output
-    else:
-        if args.output[-4:] != file_ext:
-            output_file = args.output + file_ext
-        else:
-            output_file = args.output
-    file = open(output_file, "a+")
-if args.input:
-    input_file = open(args.input, "r")
-    entries = input_file.readlines()
-    for entry in entries:
-        port_check = entry.split(",")
-        if len(port_check) == 2:
-            destination_port = int(port_check[1][:-1])
-            destination_host = port_check[0]
-        else:
-            destination_host = entry[:-1]
-        main()
-else:
-    main()
-#Close files
-if args.output:
-    file.close()
+file_ext = ".json"
+main()
